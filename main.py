@@ -1,72 +1,76 @@
-# import necessary modules
-
-# for implementing the HTTP Web servers
 import http.server
-
-# provides access to the BSD socket interface
-import socket
-
-# a framework for network servers
 import socketserver
-
-# to display a Web-based documents to users
-import webbrowser
-
-# to generate qrcode
-import pyqrcode
-from pyqrcode import QRCode
-
-# convert into png format
-import png
-
-# to access operating system control
 import os
+import urllib.parse
+import zipfile
+import io
 
-
-# assigning the appropriate port value
 PORT = 8010
-# this finds the name of the computer user
-os.environ['USERPROFILE']
+desktop = os.path.join(os.path.join(os.environ['USERPROFILE']), 'OneDrive')
+upload_dir = os.path.join(desktop, 'uploads')
+os.makedirs(upload_dir, exist_ok=True)  # Create upload directory if it doesn't exist
+os.chdir(upload_dir)
 
+class CustomHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
+    def do_POST(self):
+        if self.path == '/upload':
+            # Handle file upload
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            boundary = self.headers['Content-Type'].split("=")[1].encode()
+            parts = post_data.split(boundary)
 
-# changing the directory to access the files desktop
-# with the help of os module
-desktop = os.path.join(os.path.join(os.environ['USERPROFILE']),
-					'OneDrive')
-os.chdir(desktop)
+            for part in parts:
+                if b'filename=' in part:
+                    # Extract filename
+                    filename = part.split(b'filename=')[1].split(b'\r\n')[0].strip(b'"')
+                    filename = os.path.join(upload_dir, filename.decode())
+                    with open(filename, 'wb') as f:
+                        f.write(part.split(b'\r\n\r\n')[1].split(b'\r\n')[0])
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b'Files uploaded successfully!')
+            return
 
+    def do_GET(self):
+        if self.path == '/':
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            self.wfile.write(b'''
+                <html>
+                <body>
+                    <h1>Upload Files</h1>
+                    <form action="/upload" method="post" enctype="multipart/form-data">
+                        <input type="file" name="file" multiple>
+                        <input type="submit" value="Upload">
+                    </form>
+                    <h1>Download Files</h1>
+                    <form action="/download" method="get">
+                        <input type="submit" value="Download All Files as ZIP">
+                    </form>
+                </body>
+                </html>
+            ''')
+        elif self.path == '/download':
+            # Create a zip file of all uploaded files
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
+                for foldername, subfolders, filenames in os.walk(upload_dir):
+                    for filename in filenames:
+                        file_path = os.path.join(foldername, filename)
+                        zip_file.write(file_path, os.path.relpath(file_path, upload_dir))
+            zip_buffer.seek(0)
 
-# creating a http request
-Handler = http.server.SimpleHTTPRequestHandler
-# returns, host name of the system under
-# which Python interpreter is executed
-hostname = socket.gethostname()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/zip')
+            self.send_header('Content-Disposition', 'attachment; filename=uploaded_files.zip')
+            self.end_headers()
+            self.wfile.write(zip_buffer.read())
+            return
+        else:
+            super().do_GET()
 
-
-# finding the IP address of the PC
-s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-s.connect(("8.8.8.8", 80))
-IP = "http://" + s.getsockname()[0] + ":" + str(PORT)
-link = IP
-
-
-# converting the IP address into the form of a QRcode
-# with the help of pyqrcode module
-
-# converts the IP address into a Qrcode
-url = pyqrcode.create(link)
-# saves the Qrcode inform of svg
-url.svg("myqr.svg", scale=8)
-# opens the Qrcode image in the web browser
-webbrowser.open('myqr.svg')
-
-
-# Creating the HTTP request and serving the
-# folder in the PORT 8010,and the pyqrcode is generated
-
-# continuous stream of data between client and server
-with socketserver.TCPServer(("", PORT), Handler) as httpd:
-	print("serving at port", PORT)
-	print("Type this in your Browser", IP)
-	print("or Use the QRCode")
-	httpd.serve_forever()
+with socketserver.TCPServer(("", PORT), CustomHTTPRequestHandler) as httpd:
+    print("serving at port", PORT)
+    httpd.serve_forever()
