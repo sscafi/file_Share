@@ -1,6 +1,6 @@
 # Multi-File Upload and Download HTTP Server
 
-This project implements a simple HTTP server in Python that allows users to upload multiple files and download them as a ZIP file. The server serves files from a designated upload directory within the user's OneDrive folder.
+This project implements a simple HTTP server in Python that allows users to upload multiple files and download them as a ZIP file. The server serves files from a designated upload directory within the user's OneDrive folder
 
 ## Features
 
