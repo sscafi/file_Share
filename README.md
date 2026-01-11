@@ -174,3 +174,4 @@ This project is open source and available under the [MIT License](LICENSE).
 ---
 
 **Server runs on port 8010** - Access the application at `http://localhost:8010`
+## New Version Coming Soon
